@@ -96,11 +96,11 @@ class Decoder {
   void Reset();
 
   // ROS related parameters
+  ros::Time start;
   std::string frame_id_;
   int range_max_;
   int ange_start_;
   int ange_end_;
-  int ange_offset_;
   ros::NodeHandle pnh_;
   // sub driver topic(msg) 
   ros::Subscriber packet_sub_;
@@ -126,9 +126,8 @@ class Decoder {
   std::vector<uint16_t> scanIntensityInVec_;
   std::vector<uint16_t> scanIntensityOutVec_;
 
-  std::vector<double> scanAngleBuffer;
-  std::vector<double> scanRangeBuffer;
-  std::vector<double> scanintensitiesBuffer;
+  std::vector<float> scanRangeBuffer;
+  std::vector<float> scanintensitiesBuffer;
   uint16_t azimuthLast_;
   uint16_t azimuthNow_;
   uint16_t azimuthFirst_;
@@ -148,6 +147,7 @@ Decoder::Decoder(const ros::NodeHandle& pnh)
   ROS_INFO("Ole Topic: %s/scan", frame_id_.c_str());
   ROS_INFO("Ole RangeMax: %d mm", range_max_);
   ROS_INFO("===========================");
+  start= ros::Time::now();
   // dynamic callback 
   cfg_server_.setCallback(boost::bind(&Decoder::ConfigCb, this, _1, _2));
   // packet receive
@@ -156,6 +156,7 @@ Decoder::Decoder(const ros::NodeHandle& pnh)
   azimuthFirst_=0xFFFF;
   // laserscan msg init
   scanMsgSeq_ = 0;
+
 }
 
 
@@ -196,10 +197,10 @@ void Decoder::PublishMsg(ros::Publisher* pub,std::vector<uint16_t> &packet_r,std
  
   // below constant future from cfg param 
     //重定向输出角度范围
-  scanMsg.angle_min = deg2rad(config_.angle_min+config_.angle_offset);
-  scanMsg.angle_max = deg2rad(config_.angle_max+config_.angle_offset);
+  scanMsg.angle_min = deg2rad(config_.angle_min);
+  scanMsg.angle_max = deg2rad(config_.angle_max);
   //scanMsg.scan_time = scan_time;
-  scanMsg.scan_time = 1.0f/config_.freq;
+
   
   scanMsg.angle_increment = deg2rad(config_.step);
   scanMsg.time_increment = scanMsg.scan_time / route ;
@@ -207,51 +208,49 @@ void Decoder::PublishMsg(ros::Publisher* pub,std::vector<uint16_t> &packet_r,std
   scanMsg.range_min = config_.range_min;  //unit:m
   scanMsg.range_max = config_.range_max;
 
-  //int effective_count = 1600;
-  //std::reverse(myvector.begin(),myvector.end());
-  //scanMsg.ranges = std::reverse(scanRangeVec_.begin(),scanRangeVec_.end());
-  int min=config_.angle_min*100;
-  int max=config_.angle_max*100;
+
+  int min=config_.angle_min*100+18000;
+  int max=config_.angle_max*100+18000;
 
   //ROS_INFO("Min:%d  Max:%d", min, max);
 
-
-  scanMsg.ranges.resize(route);
-  scanMsg.intensities.resize(route);
-  scanAngleBuffer.clear();
   scanRangeBuffer.clear();
   scanintensitiesBuffer.clear();
   //ROS_INFO("start to build ranges and intensities");
   for(uint16_t i=0;i<route;i++){
-    // reverse,laserscan is anticlockwise,
-    int angle= scanAngleOutVec_[route-1 - i];
+    // 过滤出指定角度范围内点云
+    int angle= scanAngleOutVec_[i];
     if(angle>=min && angle <=max)
 	{
-		double range = scanRangeOutVec_[route-1 - i] * 0.001f;
-		double intensities = scanIntensityOutVec_[route-1 - i] * 1.0f;
-		if(range > scanMsg.range_max) range = scanMsg.range_max; 
+		float range = scanRangeOutVec_[i] * 0.001f;
+		float intensities = scanIntensityOutVec_[i] * 1.0f;
 
 	    scanRangeBuffer.push_back(range);
 	    scanintensitiesBuffer.push_back(intensities);
 	}
   }
+
   int bufferlen=scanRangeBuffer.size();
   scanMsg.ranges.resize(bufferlen);
   scanMsg.intensities.resize(bufferlen);
+
   for(uint16_t i=0;i<bufferlen;i++){
     scanMsg.ranges[i]=scanRangeBuffer[i];
     scanMsg.intensities[i]=scanintensitiesBuffer[i];
-    //ROS_INFO("r_:%f",scanMsg.ranges[i]);
   }
 
-  //ROS_INFO("scanAngleOutVec_:%d",scanAngleOutVec_[0]);
+  float step =((config_.angle_max)-(config_.angle_min))/bufferlen;
+  //ROS_INFO("scan step:%f",step);
+ 
+  scanMsg.angle_increment = deg2rad(step);
+  scanMsg.time_increment = scanMsg.scan_time / bufferlen ;
+  scanMsg.scan_time = (ros::Time::now() - start).toSec();
   if(scanAngleOutVec_[0]<23) //当起始角度从0开始才被认为合法帧
   {
-    int len=scanMsg.ranges.size();
-    //ROS_INFO("Length:%d",len);
-     pub->publish(scanMsg);
+    //ROS_INFO("points:%d",bufferlen);
+    pub->publish(scanMsg);
   }
-
+    start= ros::Time::now();
 }
 
 
@@ -275,8 +274,8 @@ void Decoder::DecodeAndFill(const Packet* const packet_buf, uint64_t time) {
     azimuth =block.sequences[0].points[0].azimuth;
     range = block.sequences[0].points[0].distance;
     intensity = block.sequences[0].points[0].reflectivity;
-    //ROS_INFO("intensity:%d",intensity);
-    if(range>range_max_) {range=0;intensity=0;}
+    //排除异常点云数据
+    if(range > range_max_ || range<10) {range=0;intensity=0;}
     // azimuth ge 36000 is not valid
     if(azimuth < 0xFF00){
       scanAngleVec_.push_back(azimuth);
@@ -324,7 +323,6 @@ void Decoder::PacketNormalize(std::vector<uint16_t> &packet_in,std::vector<uint1
 
 
 void Decoder::PacketCb(const OleiPacketConstPtr& packet_msg) {
-  const auto start = ros::Time::now();
   // uint16_t route = uint16_t(config_.route);
 
   const auto* packet_buf =
@@ -370,6 +368,7 @@ void Decoder::PacketCb(const OleiPacketConstPtr& packet_msg) {
   scanAngleInVec_.clear();
   scanRangeInVec_.clear();
   scanIntensityInVec_.clear();
+
   scanAngleOutVec_.clear();
   scanRangeOutVec_.clear();
   scanIntensityOutVec_.clear();
@@ -386,14 +385,14 @@ void Decoder::PacketCb(const OleiPacketConstPtr& packet_msg) {
   PacketNormalize(scanRangeInVec_,scanRangeOutVec_);
   PacketNormalize(scanIntensityInVec_,scanIntensityOutVec_);
 
-
+  //抛出点云数据
   PublishMsg(&scan_pub_,scanRangeOutVec_,scanIntensityOutVec_);
 
-
+  //解码原始数据包
   DecodeAndFill(packet_buf, packet_msg->stamp.toNSec());
   // Don't forget to reset
   // Reset();
-  ROS_DEBUG("Time: %f", (ros::Time::now() - start).toSec());
+  //ROS_INFO("Time: %f", (ros::Time::now() - start).toSec());
 }
 
 void Decoder::ConfigCb(OleiPuckConfig& config, int level) {
@@ -401,16 +400,13 @@ void Decoder::ConfigCb(OleiPuckConfig& config, int level) {
        //config.route =4000;
 pnh_.param<int>("ang_start", ange_start_, 0);
 pnh_.param<int>("ang_end", ange_end_, 360);
-pnh_.param<int>("ang_offset", ange_offset_, 0);
   pnh_.param<int>("r_max", range_max_, 30);
 config.angle_min=ange_start_;
 config.angle_max=ange_end_;
-config.angle_offset=ange_offset_;
+config.range_min=0.01;
 config.range_max=range_max_;
-      //config.step =360/config.route;
-  ROS_INFO("Angle_Offset(rotate):%d",ange_offset_);
   ROS_INFO(
-      "Config:freq:%.0f\r\n angle_start: %.0f, angle_end: %.0f \r\n range_min: %.0f, range_max: %.0f" ,
+      "Config:freq:%.0f\r\n angle_min: %.2f, angle_max: %.2f \r\n range_min: %.2f, range_max: %.2f" ,
       config.freq,
       config.angle_min,
       config.angle_max,
@@ -424,7 +420,7 @@ config.range_max=range_max_;
     // topic = sacn,msg = LaserScan,queuesize=10
     scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
     packet_sub_ = pnh_.subscribe<OleiPacket>("packet", 256, &Decoder::PacketCb, this);
-    ROS_INFO("Drive Ver:2.0.6");
+    ROS_INFO("Drive Ver:2.0.7");
     ROS_INFO("Decoder initialized");
   }
 }

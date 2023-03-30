@@ -26,3 +26,4 @@ target_include_directories(${PROJECT_NAME}_decoder PUBLIC ${catkin_INCLUDE_DIRS}
 target_link_libraries(${PROJECT_NAME}_decoder PUBLIC ${catkin_LIBRARIES})
 
 add_dependencies(${PROJECT_NAME}_driver ${PROJECT_NAME}_gencfg)
+add_dependencies(${PROJECT_NAME}_decoder ${PROJECT_NAME}_gencfg)
