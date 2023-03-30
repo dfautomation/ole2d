@@ -2,7 +2,7 @@
   <arg name="pkg" value="olelidar"/>
 
   <arg name="frame_id" default="olelidar"/>
-  <arg name="r_max" default="30"/>
+  <arg name="r_max" default="50"/>
   <arg name="ang_start" default="0"/>
   <arg name="ang_end" default="360"/>
   <arg name="inverted" default="false"/>

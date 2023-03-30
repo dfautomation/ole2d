@@ -1,4 +1,4 @@
-# Olei LIDAR scan packets.
+# olei LIDAR scan packets.
 
 Header           header         # standard ROS message header
-OleiPacket[] packets        # vector of raw packets
+oleiPacket[] packets        # vector of raw packets

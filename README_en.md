@@ -1,7 +1,7 @@
 ## olam 2D lidar ROS Drive and LaserScan  ##
 
-### Version:2.0.10 ###
-### update time:2021-01-22 ###
+### Version:2.0.11 ###
+### update time:2022-01-22 ###
 
 #### build ####
 1. make catkin workspace at your ros machine

@@ -12,7 +12,7 @@ static constexpr float kTau = M_PI * 2;
 static constexpr float deg2rad(float deg) { return deg * M_PI / 180.0; }
 static constexpr float rad2deg(float rad) { return rad * 180.0 / M_PI; }
 
-// Raw OLei packet constants and structures.
+// Raw olei packet constants and structures.
 // 1 packet = 150 blocks
 // 1 block = 1 sequence
 // 1 sequence = 1 firing = 1 point
@@ -72,4 +72,4 @@ inline constexpr float AzimuthResolutionDegree(int rpm) {
   return rpm / 60.0 * 360.0 * kFiringCycleNs / 1e9;
 }
 
-}  // namespace olei_puck
+}  // namespace olelidar

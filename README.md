@@ -1,7 +1,7 @@
 ## 欧镭2D激光雷达ROS驱动  ##
 
-### Version:2.0.10 ###
-### update time:2020-01-22 ###
+### Version:2.0.11 ###
+### update time:2022-01-22 ###
 #### 更新内容 ####
 1. 增加组播适配功能;
 	scan.launch定义local_ip为本地网卡接口;multiaddr为组播IP

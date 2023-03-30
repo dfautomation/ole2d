@@ -7,35 +7,31 @@
   <arg name="device_port" default="2368"/>
   <arg name="local_ip" default="192.168.1.10"/>
   <arg name="multiaddr" default=""/>
+  
   <!-- decoder -->
   <arg name="frame_id" default="olelidar"/>
-  <arg name="r_max" default="30000"/>
+  <arg name="r_max" default="50"/>
   <arg name="ang_start" default="-180"/>
   <arg name="ang_end" default="180"/>
   <arg name="decoder" default="true"/>
-  <arg name="route" default="1600"/>
-  <arg name="step" default="0.225"/> 
   <arg name="inverted" default="false"/>
   <arg name="debug" default="false"/>
-  <arg name="poly" default="1"/>
   <env if="$(arg debug)" name="ROSCONSOLE_CONFIG_FILE" value="$(find olelidar)/launch/debug.conf"/>
 
-  <group ns="$(arg frame_id)">
-    <include file="$(find olelidar)/launch/driver.launch" if="$(arg driver)">
-      <arg name="device_ip" value="$(arg device_ip)"/>
-      <arg name="device_port" value="$(arg device_port)"/>
-      <arg name="local_ip" value="$(arg local_ip)"/>
-      <arg name="multiaddr" value="$(arg multiaddr)"/>
-    </include>
+  <node pkg="$(arg pkg)" type="$(arg pkg)_decoder" name="$(arg pkg)_decoder" output="screen">
+    <param name="frame_id" type="string" value="$(arg frame_id)"/>
+    <param name="r_max" type="int" value="$(arg r_max)"/>
+    <param name="ang_start" type="int" value="$(arg ang_start)"/>
+    <param name="ang_end" type="int" value="$(arg ang_end)"/>
+    <param name="inverted" type="bool" value="$(arg inverted)"/>
+    <remap from="~packet" to="packet"/>
+    <remap from="~scan" to="/olelidar/scan"/>
 
-    <include file="$(find olelidar)/launch/decoder.launch" if="$(arg decoder)">
-      <arg name="frame_id" value="$(arg frame_id)"/>
-      <arg name="r_max" value="$(arg r_max)"/>
-      <arg name="ang_start" value="$(arg ang_start)"/>
-      <arg name="ang_end" value="$(arg ang_end)"/>
-      <arg name="inverted" value="$(arg inverted)"/>
-      <arg name="poly" value="$(arg poly)"/>
-    </include>
-  </group>
+    <param name="device_ip" type="string" value="$(arg device_ip)"/>
+    <param name="device_port" type="int" value="$(arg device_port)"/>
+    <param name="local_ip" type="string" value="$(arg local_ip)"/>
+    <param name="multiaddr" type="string" value="$(arg multiaddr)"/>
+
+  </node>
 
 </launch>
