@@ -204,8 +204,8 @@ namespace olelidar
     my_addr.sin_family = AF_INET;                     // host byte order
     my_addr.sin_port = htons(uint16_t(device_port_)); // short, in network byte order
     my_addr.sin_addr.s_addr = INADDR_ANY;            // automatically fill in my IP
-
-
+    
+    
     if (bind(socket_id_, (sockaddr *)&my_addr, sizeof(sockaddr)) == -1)
     {
       perror("bind"); // TODO: ROS_ERROR errno
@@ -214,12 +214,12 @@ namespace olelidar
     }
     if(multiaddr_ip_str_!="")
     {
-    //加入组播才能接受到组播信息
-    struct ip_mreq mreq;
-    mreq.imr_multiaddr.s_addr = inet_addr(multiaddr_ip_str_.c_str());
-    mreq.imr_interface.s_addr = inet_addr(local_ip_str_.c_str());
-    int err=setsockopt(socket_id_,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq));
-    ROS_INFO("AddMultiaddr:%s  local:%s   =>%d ",multiaddr_ip_str_.c_str(),local_ip_str_.c_str(),err);
+		//加入组播才能接受到组播信息
+		struct ip_mreq mreq;
+		mreq.imr_multiaddr.s_addr = inet_addr(multiaddr_ip_str_.c_str());
+		mreq.imr_interface.s_addr = inet_addr(local_ip_str_.c_str());
+		int err=setsockopt(socket_id_,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq));
+		ROS_INFO("AddMultiaddr:%s  local:%s   =>%d ",multiaddr_ip_str_.c_str(),local_ip_str_.c_str(),err);
     }   
     if (fcntl(socket_id_, F_SETFL, O_NONBLOCK | FASYNC) < 0)
     {

@@ -10,13 +10,14 @@
   <arg name="rpm" default="900"/>
   
   <!-- decoder -->
-  <arg name="frame_id" default="olelidar"/>
+  <arg name="frame_id" default="olelaser_base"/>
   <arg name="range_min" default="0.1"/>
   <arg name="range_max" default="50"/>
   <arg name="ang_start" default="-180"/>
   <arg name="ang_end" default="180"/>
   <arg name="decoder" default="true"/>
   <arg name="inverted" default="false"/>
+  <arg name="timeFromLidar" default="true"/>
 
   <node pkg="$(arg pkg)" type="$(arg pkg)_decoder" name="$(arg pkg)_decoder" output="screen">
     <param name="frame_id" type="string" value="$(arg frame_id)"/>
@@ -25,6 +26,7 @@
     <param name="ang_start" type="int" value="$(arg ang_start)"/>
     <param name="ang_end" type="int" value="$(arg ang_end)"/>
     <param name="inverted" type="bool" value="$(arg inverted)"/>
+    <param name="timeFromLidar" type="bool" value="$(arg timeFromLidar)"/>
     <remap from="~packet" to="packet"/>
     <remap from="~scan" to="/olelidar/scan"/>
 

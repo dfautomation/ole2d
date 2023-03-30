@@ -104,6 +104,7 @@ namespace olelidar
     int ange_start_;
     int ange_end_;
     bool inverted_;
+    bool timeFromLidar_;
     int poly_=1;
     ros::NodeHandle pnh_;
     // sub driver topic(msg)
@@ -175,7 +176,7 @@ namespace olelidar
 #endif
     drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
 
-    ROS_INFO("Drive Ver:2.1.02");
+    ROS_INFO("Drive Ver:2.1.03");
     ROS_INFO("Decoder initialized");
 
   }
@@ -239,6 +240,7 @@ namespace olelidar
     //扫描顺序自增ID序列
     scanMsg.header.seq = scanMsgSeq_;
     scanMsgSeq_++;
+    
     //激光数据时间戳
     ros::Duration td=lidar_time-lastTime;
     //ROS_INFO("ros::Duration-->%.3lf", td.toSec());
@@ -273,6 +275,8 @@ namespace olelidar
     uint16_t fb=360/(config_.step);
     if (fb==size){
       pub->publish(scanMsg); //校验当符合点数完整的一帧数据才向外发布话题
+      //ROS_INFO("time:%f  \ttime diff:%f",lidar_time.toSec(),(lidar_time-ros::Time::now()).toSec());
+    
       lastTime=lidar_time;
     }
     else{
@@ -412,9 +416,17 @@ namespace olelidar
 	
 	//当启用NTP服务时，时间戳重定向为NTP服务时间
 	if(packet_buf->head.rsv>0){
-		ros::Time ntp(packet_buf->head.rsv, packet_buf->head.timestamp);
+		ros::Time ntp(packet_buf->head.rsv+packet_buf->head.timestamp/4294967296.0);
+		ROS_INFO("time:%f  \t time diff:%f  rsv:%u \t timestamp:%f",ntp.toSec(),(ntp-ros::Time::now()).toSec(),packet_buf->head.rsv,packet_buf->head.timestamp/4294967296.0);
 		lidar_time=ntp;
 	}
+	//如果不采用雷达内部时间戳，则调用ROS系统时间作为时间戳
+	if(!timeFromLidar_) {
+		lidar_time = ros::Time::now();
+	 }
+	
+	
+	
     scanAngleInVec_.clear();
     scanRangeInVec_.clear();
     scanIntensityInVec_.clear();
@@ -426,7 +438,7 @@ namespace olelidar
     scanAngleVec_.clear();
     scanRangeVec_.clear();
     scanIntensityVec_.clear();
-
+	
     //抛出点云数据
     PublishMsg(&scan_pub_, scanRangeInVec_, scanIntensityInVec_, lidar_time);
 
@@ -445,6 +457,7 @@ namespace olelidar
     pnh_.param<float>("range_min", range_min_, 0.1);
     pnh_.param<float>("range_max", range_max_, 50);
     pnh_.param<bool>("inverted", inverted_, false);
+    pnh_.param<bool>("timeFromLidar", timeFromLidar_, true);
     pnh_.param<string>("rpm", rpm_, "900");
     rpmConfig=std::stoi(rpm_);
     //http://192.168.1.100/SetConfigs?rpm=900
