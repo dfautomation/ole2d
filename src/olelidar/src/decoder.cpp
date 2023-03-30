@@ -1,5 +1,7 @@
 #include "constants.h"
+
 #include <dynamic_reconfigure/server.h>
+
 #include <sensor_msgs/LaserScan.h>
 
 #include <olei_msgs/oleiPacket.h>
@@ -7,8 +9,6 @@
 #include <olelidar/oleiPuckConfig.h>
 
 #include "driver.cpp"
-
-
 // here maskoff waring of macro 'ROS_LOG'
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 
@@ -96,6 +96,7 @@ namespace olelidar
     uint32_t inner_timestamp_base_;
 
     std::string frame_id_;
+    std::string rpm_;
     int range_min_=200;
     int range_max_;
     int ange_start_;
@@ -171,7 +172,7 @@ namespace olelidar
 #endif
     drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
 
-    ROS_INFO("Drive Ver:2.0.12");
+    ROS_INFO("Drive Ver:2.1.01");
     ROS_INFO("Decoder initialized");
 
   }
@@ -315,11 +316,13 @@ namespace olelidar
     //取得第一个数据包
     if (azimuthFirst_ == 0xFFFF)
     {
+          //取得转速
+      //int real_rpm = (packet_buf->head.rpm) & 0x7FFF;
+      int rpm = std::stoi(rpm_);
       //雷达型号类型
       lidarType = packet_buf->head.code[1];
       azimuthFirst_ = azimuthNow_;
-      //取得转速
-      int rpm = (packet_buf->head.rpm) & 0x7FFF;
+
       //取得电机旋转方向
       direction = (packet_buf->head.rpm) >> 15;
       ROS_INFO("rpm:%d  direction:%d  lidarType:%d", rpm, direction,lidarType);
@@ -420,6 +423,8 @@ namespace olelidar
     pnh_.param<int>("ang_end", ange_end_, 360);
     pnh_.param<int>("r_max", range_max_, 50);
     pnh_.param<bool>("inverted", inverted_, false);
+    pnh_.param<string>("rpm", rpm_, "900");
+    //http://192.168.1.100/SetConfigs?rpm=900
     config.angle_min = ange_start_;
     config.angle_max = ange_end_;
     config.range_min = range_min_*0.001;

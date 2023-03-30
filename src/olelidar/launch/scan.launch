@@ -7,21 +7,18 @@
   <arg name="device_port" default="2368"/>
   <arg name="local_ip" default="192.168.1.10"/>
   <arg name="multiaddr" default=""/>
+  <arg name="rpm" default="900"/>
   
   <!-- decoder -->
   <arg name="frame_id" default="olelidar"/>
-  <arg name="rpm" default="600"/>
   <arg name="r_max" default="50"/>
   <arg name="ang_start" default="-180"/>
   <arg name="ang_end" default="180"/>
   <arg name="decoder" default="true"/>
   <arg name="inverted" default="false"/>
-  <arg name="debug" default="false"/>
-  <env if="$(arg debug)" name="ROSCONSOLE_CONFIG_FILE" value="$(find olelidar)/launch/debug.conf"/>
 
   <node pkg="$(arg pkg)" type="$(arg pkg)_decoder" name="$(arg pkg)_decoder" output="screen">
     <param name="frame_id" type="string" value="$(arg frame_id)"/>
-    <param name="rpm" type="string" value="$(arg rpm)"/>
     <param name="r_max" type="int" value="$(arg r_max)"/>
     <param name="ang_start" type="int" value="$(arg ang_start)"/>
     <param name="ang_end" type="int" value="$(arg ang_end)"/>
@@ -33,6 +30,7 @@
     <param name="device_port" type="int" value="$(arg device_port)"/>
     <param name="local_ip" type="string" value="$(arg local_ip)"/>
     <param name="multiaddr" type="string" value="$(arg multiaddr)"/>
+    <param name="rpm" type="string" value="$(arg rpm)"/>
 
   </node>
 
