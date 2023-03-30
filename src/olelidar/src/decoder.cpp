@@ -95,10 +95,12 @@ namespace olelidar
     ros::Time local_timestamp_base_;
     uint32_t inner_timestamp_base_;
 
+	ros::Time lastTime = ros::Time::now();
     std::string frame_id_;
     std::string rpm_;
-    int range_min_=200;
-    int range_max_;
+	int rpmConfig=900;
+    float range_min_=0.1;
+    float range_max_=50;
     int ange_start_;
     int ange_end_;
     bool inverted_;
@@ -147,11 +149,12 @@ namespace olelidar
   {
     // get param from cfg file at node start
     pnh_.param<std::string>("frame_id", frame_id_, "olelidar");
-    pnh_.param<int>("r_max", range_max_, 30);
+    pnh_.param<float>("range_min", range_min_, 0.1);
+    pnh_.param<float>("range_max", range_max_, 30);
     ROS_INFO("===========================");
     ROS_INFO("Frame_id: %s", frame_id_.c_str());
     ROS_INFO("Topic: /%s/scan", frame_id_.c_str());
-    ROS_INFO("Range: [%d ~ %d] mm",range_min_, range_max_*1000);
+    ROS_INFO("Range: [%.2f ~ %.2f] m",range_min_, range_max_);
     ROS_INFO("===========================");
     start = ros::Time::now();
     // dynamic callback
@@ -166,13 +169,13 @@ namespace olelidar
 
     drv_ = std::make_shared<Driver>(pnh);
     
-    scan_pub_ = pnh_.advertise<LaserScan>("scan", 100);
+    scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
 #ifdef DRIVER_MODULE
-    packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 100, &Decoder::PacketCb, this, ros::TransportHints().tcpNoDelay(true));
+    packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 10, &Decoder::PacketCb, this, ros::TransportHints().tcpNoDelay(true));
 #endif
     drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
 
-    ROS_INFO("Drive Ver:2.1.01");
+    ROS_INFO("Drive Ver:2.1.02");
     ROS_INFO("Decoder initialized");
 
   }
@@ -237,8 +240,11 @@ namespace olelidar
     scanMsg.header.seq = scanMsgSeq_;
     scanMsgSeq_++;
     //激光数据时间戳
-    //scanMsg.header.stamp = lidar_time;
-    scanMsg.header.stamp = ros::Time::now();
+    ros::Duration td=lidar_time-lastTime;
+    //ROS_INFO("ros::Duration-->%.3lf", td.toSec());
+    //if(td.toSec()<0.061 || td.toSec()>0.071) ROS_WARN("ros::Duration======================>%.3lf", td.toSec());
+    scanMsg.header.stamp = lidar_time;
+    //scanMsg.header.stamp = ros::Time::now();
     //FrameId
     scanMsg.header.frame_id = frame_id_.c_str();
     //定义开始角度和结束角度
@@ -267,10 +273,11 @@ namespace olelidar
     uint16_t fb=360/(config_.step);
     if (fb==size){
       pub->publish(scanMsg); //校验当符合点数完整的一帧数据才向外发布话题
+      lastTime=lidar_time;
     }
     else{
       if(scanMsgSeq_==1) return;
-      ROS_INFO("pointCloud frame:%d  size:%d  scanMsgSeq_:%d",fb,size,scanMsgSeq_);
+      ROS_WARN("pointCloud frame:%d  size:%d  scanMsgSeq_:%d",fb,size,scanMsgSeq_);
     }
   }
 
@@ -290,7 +297,7 @@ namespace olelidar
       range = block.sequences[0].points[0].distance;
       intensity = block.sequences[0].points[0].reflectivity;
       //排除异常点云数据
-      if (range > range_max_*1000 || range < range_min_)
+      if (range > range_max_*1000 || range < range_min_*1000)
       {
         range = 0;
         intensity = 0;
@@ -343,6 +350,7 @@ namespace olelidar
     // scan first half route
     if (azimuthFirst_ >= 200)
     {
+      ROS_INFO("scan first half route");
       azimuthFirst_ = azimuthNow_;
       return;
     }
@@ -369,15 +377,15 @@ namespace olelidar
     //ROS_INFO("inner timestamp: %u, %d", nowstamp, scantime);
 
     //雷达工作频率
+	int real_rpm = (packet_buf->head.rpm) & 0x7FFF;
     if(frequency<0.001){
        lidarType = packet_buf->head.code[1]; //雷达型号类型
 		if(lidarType==0x01){
-		  int rpm = (packet_buf->head.rpm) & 0x7FFF;
-		  frequency = rpm / 60.0;
+		  frequency = real_rpm / 60.0;
 		  config_.step=0.225;    //当雷达型号为0x01类型时，角分辨率为固定值
 		}
 		else{    
-		      if(scanAngleVec_.size()>2) {
+		   if(scanAngleVec_.size()>2) {
 					//角度分辨率
 					config_.step = (scanAngleVec_[1]-scanAngleVec_[0])/100.0;
 					frequency = config_.step * 10000.0/60.0; 
@@ -386,9 +394,22 @@ namespace olelidar
 					return;
 				}
 		}
-		ROS_INFO("frequency: %.0f hz  config_.step:%f",frequency,config_.step);
+		ROS_INFO("frequency: %.0f hz  config_.step:%.3f",frequency,config_.step);
     }
-
+	else
+	{
+		//动态调整工作频率复位
+		if(std::abs(real_rpm-rpmConfig)>rpmConfig*0.2) {
+		    rpmConfig=real_rpm;
+			ROS_INFO("==>Changed RPM:%d",rpmConfig);
+			frequency=0;azimuthFirst_ = 0xFFFF;
+			scanAngleVec_.clear();
+			scanRangeVec_.clear();
+			scanIntensityVec_.clear();
+			return;
+		}
+	}
+	
 	//当启用NTP服务时，时间戳重定向为NTP服务时间
 	if(packet_buf->head.rsv>0){
 		ros::Time ntp(packet_buf->head.rsv, packet_buf->head.timestamp);
@@ -421,22 +442,24 @@ namespace olelidar
     //config.route =4000;
     pnh_.param<int>("ang_start", ange_start_, 0);
     pnh_.param<int>("ang_end", ange_end_, 360);
-    pnh_.param<int>("r_max", range_max_, 50);
+    pnh_.param<float>("range_min", range_min_, 0.1);
+    pnh_.param<float>("range_max", range_max_, 50);
     pnh_.param<bool>("inverted", inverted_, false);
     pnh_.param<string>("rpm", rpm_, "900");
+    rpmConfig=std::stoi(rpm_);
     //http://192.168.1.100/SetConfigs?rpm=900
     config.angle_min = ange_start_;
     config.angle_max = ange_end_;
-    config.range_min = range_min_*0.001;
+    config.range_min = range_min_;
     config.range_max = range_max_;
     config_ = config;
 
 
     if (level < 0){
       // topic = scan, msg = LaserScan, queuesize = 1000
-      scan_pub_ = pnh_.advertise<LaserScan>("scan", 100);
+      scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
 #ifdef DRIVER_MODULE
-      packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 100, &Decoder::PacketCb, this);
+      packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 10, &Decoder::PacketCb, this);
 #endif
     }
   }

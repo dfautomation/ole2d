@@ -1,6 +1,6 @@
 ## olam 2D lidar ROS Drive and LaserScan  ##
 
-### Version:2.1.01 ###
+### Version:2.1.02 ###
 ### update time:2022-05-18 ###
 
 #### build ####
