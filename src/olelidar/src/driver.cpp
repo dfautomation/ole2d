@@ -11,7 +11,8 @@
 #include <thread>
 
 #include "constants.h"
-
+#include <iostream>
+#include <boost/asio.hpp>
 #include <diagnostic_updater/diagnostic_updater.h>
 #include <diagnostic_updater/publisher.h>
 #include <olei_msgs/oleiPacket.h>
@@ -43,6 +44,7 @@ namespace olelidar
     void setCallback(const data_cb_t &cb) { data_cb_ = cb; }
 
   private:
+    int httpGet(const std::string request_path, std::string &header, std::string &content);
     bool OpenUdpPort();
     int ReadPacket(oleiPacket &packet);
 
@@ -50,6 +52,7 @@ namespace olelidar
     std::string device_ip_str_;
     std::string local_ip_str_;
     std::string multiaddr_ip_str_;
+    std::string rpm_;
     int device_port_;
     in_addr device_ip_;
     int socket_id_{-1};
@@ -71,17 +74,36 @@ namespace olelidar
     bool is_loop_{false};
   };
 
-  Driver::Driver(const ros::NodeHandle &pnh) 
-    : pnh_(pnh)
-    , last_time_(ros::Time::now())
+  Driver::Driver(const ros::NodeHandle &pnh): pnh_(pnh), last_time_(ros::Time::now())
   {
     ROS_INFO("packet size: %zu", kPacketSize);
     pnh_.param("device_ip", device_ip_str_, std::string("192.168.1.100"));
     pnh_.param("device_port", device_port_, 2368);
     pnh_.param("local_ip", local_ip_str_, std::string("192.168.1.10"));
     pnh_.param("multiaddr", multiaddr_ip_str_, std::string(""));
+    pnh_.param("rpm", rpm_, std::string("900"));
     ROS_INFO("device_ip: %s:%d", device_ip_str_.c_str(), device_port_);
+	ROS_INFO("Connecting LiDAR at %s", device_ip_str_.c_str());
+	//设定转速
+	std::string request_str="/GetInfo?type=CFG";
+	std::string header, content;
+	httpGet(request_str,header,content);
+	
+	std::string f_rpm = "\"RPM\":"+rpm_;
+	
+	std::cout << f_rpm << std::endl;
+	std::string::size_type isfind = content.find(f_rpm);
+	if(isfind== std::string::npos)
+	{
+		request_str="/SetConfigs?rpm=" + rpm_;
+		std::cout << "Waiting for set RPM at "<< rpm_ << std::endl;
+		httpGet(request_str,header,content);
+		sleep(5);
+	}
 
+
+	
+	
     if (inet_aton(device_ip_str_.c_str(), &device_ip_) == 0)
     {
       // inet_aton() returns nonzero if the address is valid, zero if not.
@@ -117,7 +139,107 @@ namespace olelidar
       ROS_ERROR("Failed to close socket %d at %s", socket_id_,device_ip_str_.c_str());
     }
   }
+//-----------------------------------------------------------------------------
+int Driver::httpGet(const std::string request_path, std::string &header, std::string &content)
+{
+    header = "";
+    content = "";
+    //! Scanner IP
+    std::string http_host_=device_ip_str_.c_str();
+	
+    //! Port of HTTP-Interface
+    int http_port_=80;
+    using boost::asio::ip::tcp;
+    try
+    {
+        boost::asio::io_service io_service;
 
+        // Lookup endpoint
+        tcp::resolver resolver(io_service);
+        tcp::resolver::query query(http_host_, std::to_string(http_port_));
+        tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
+        tcp::resolver::iterator end;
+
+        // Create socket
+        tcp::socket socket(io_service);
+        boost::system::error_code error = boost::asio::error::host_not_found;
+		
+        // Iterate over endpoints and etablish connection
+        while (error && endpoint_iterator != end)
+        {
+            socket.close();
+            socket.connect(*endpoint_iterator++, error);
+        }
+        if (error)
+            throw boost::system::system_error(error);
+
+        // Prepare request
+        boost::asio::streambuf request;
+        std::ostream request_stream(&request);
+        request_stream << "GET " << request_path << " HTTP/1.0\r\n\r\n";
+
+        boost::asio::write(socket, request);
+
+        // Read the response status line. The response streambuf will automatically
+        // grow to accommodate the entire line. The growth may be limited by passing
+        // a maximum size to the streambuf constructor.
+        boost::asio::streambuf response;
+        boost::asio::read_until(socket, response, "\r\n");
+
+        // Check that response is OK.
+        std::istream response_stream(&response);
+        std::string http_version;
+        response_stream >> http_version;
+        unsigned int status_code;
+        response_stream >> status_code;
+        std::string status_message;
+        std::getline(response_stream, status_message);
+        if (!response_stream || http_version.substr(0, 5) != "HTTP/")
+        {
+            std::cout << "Invalid response\n";
+            return 0;
+        }
+
+        // Read the response headers, which are terminated by a blank line.
+        boost::asio::read_until(socket, response, "\r\n\r\n");
+
+        // Process the response headers.
+        std::string tmp;
+        while (std::getline(response_stream, tmp) && tmp != "\r")
+            header += tmp+"\n";
+
+        // Write whatever content we already have to output.
+        while (std::getline(response_stream, tmp))
+            content += tmp;
+
+        // Read until EOF, writing data to output as we go.
+        while (boost::asio::read(socket, response, boost::asio::transfer_at_least(1), error))
+        {
+            response_stream.clear();
+            while (std::getline(response_stream, tmp))
+                content += tmp;
+        }
+
+        if (error != boost::asio::error::eof)
+            throw boost::system::system_error(error);
+
+        // Substitute CRs by a space
+        for( std::size_t i=0; i<header.size(); i++ )
+            if( header[i] == '\r' )
+                header[i] = ' ';
+
+        for( std::size_t i=0; i<content.size(); i++ )
+            if( content[i] == '\r' )
+                content[i] = ' ';
+		//std::cout << content << std::endl;
+        return status_code;
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << "Exception: " <<  e.what() << std::endl;
+        return 0;
+    }
+}
   bool Driver::OpenUdpPort()
   {
     socket_id_ = socket(AF_INET, SOCK_DGRAM, 0);
@@ -183,7 +305,7 @@ namespace olelidar
         }
         else if (retval == 0)
         {
-          ROS_WARN("olamlidar poll() timeout");
+          ROS_WARN("Unable to get liDar UDP data.");
           return kError;
         }
 

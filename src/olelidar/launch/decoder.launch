@@ -7,6 +7,7 @@
   <arg name="ang_end" default="360"/>
   <arg name="inverted" default="false"/>
   <arg name="poly" default="1"/>
+  <arg name="rpm" default="900"/>
   <node pkg="$(arg pkg)" type="$(arg pkg)_decoder" name="$(arg pkg)_decoder" output="screen">
     <param name="frame_id" type="string" value="$(arg frame_id)"/>
     <param name="r_max" type="int" value="$(arg r_max)"/>
@@ -14,6 +15,7 @@
     <param name="ang_end" type="int" value="$(arg ang_end)"/>
     <param name="inverted" type="bool" value="$(arg inverted)"/>
     <param name="poly" type="int" value="$(arg poly)"/>
+    <param name="rpm" type="string" value="$(arg rpm)"/>
     <remap from="~packet" to="packet"/>
     <remap from="~scan" to="scan"/>
 

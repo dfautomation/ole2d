@@ -1,7 +1,5 @@
 #include "constants.h"
-
 #include <dynamic_reconfigure/server.h>
-
 #include <sensor_msgs/LaserScan.h>
 
 #include <olei_msgs/oleiPacket.h>
@@ -9,6 +7,8 @@
 #include <olelidar/oleiPuckConfig.h>
 
 #include "driver.cpp"
+
+
 // here maskoff waring of macro 'ROS_LOG'
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 
@@ -171,7 +171,7 @@ namespace olelidar
 #endif
     drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
 
-    ROS_INFO("Drive Ver:2.0.11");
+    ROS_INFO("Drive Ver:2.0.12");
     ROS_INFO("Decoder initialized");
 
   }
