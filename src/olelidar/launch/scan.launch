@@ -13,6 +13,7 @@
   <arg name="route" default="1600"/>
   <arg name="step" default="0.225"/> 
   <arg name="frame_id" default="olelidar"/>
+  <arg name="inverted" default="false"/>
   <arg name="debug" default="false"/>
   <env if="$(arg debug)" name="ROSCONSOLE_CONFIG_FILE" value="$(find olelidar)/launch/debug.conf"/>
 
@@ -27,6 +28,7 @@
       <arg name="r_max" value="$(arg r_max)"/>
       <arg name="ang_start" value="$(arg ang_start)"/>
       <arg name="ang_end" value="$(arg ang_end)"/>
+      <arg name="inverted" value="$(arg inverted)"/>
     </include>
   </group>
 
