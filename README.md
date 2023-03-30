@@ -1,10 +1,12 @@
 ## 欧镭2D激光雷达ROS驱动  ##
 
-### Version:2.0.9 ###
+### Version:2.0.10 ###
 ### update time:2020-01-22 ###
 #### 更新内容 ####
-1. 自适应电机转向，匹配Ros坐标系。
-2. 新增launch配置项inverted，允许倒装设定。
+1. 增加组播适配功能;
+	scan.launch定义local_ip为本地网卡接口;multiaddr为组播IP
+	若multiaddr组播ip为空，则不加入组播。
+
 #### 构建 ####
 1. 在安装了ROS环境的ubuntu系统中创建工作区
 

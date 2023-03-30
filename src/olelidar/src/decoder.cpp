@@ -128,6 +128,10 @@ namespace olelidar
 
     // laserscan msg
     uint32_t scanMsgSeq_;
+    //电机频率
+    float frequency;
+    //雷达型号类型
+    unsigned char lidarType=0x01; 
     //电机方向定义
     int direction;
   };
@@ -226,12 +230,11 @@ namespace olelidar
     }
 
     float len = scanMsg.ranges.size();
-    double step = ((config_.angle_max) - (config_.angle_min)) / len;
     //扫描顺序自增ID序列
     scanMsg.header.seq = scanMsgSeq_;
     scanMsgSeq_++;
     //激光数据时间戳
-    scanMsg.header.stamp = ros::Time::now();
+    scanMsg.header.stamp = start;
     //FrameId
     scanMsg.header.frame_id = frame_id_.c_str();
     //定义开始角度和结束角度
@@ -241,15 +244,23 @@ namespace olelidar
     scanMsg.range_min = config_.range_min;
     scanMsg.range_max = config_.range_max;
     //角度分辨率
-    scanMsg.angle_increment = deg2rad(step);
-    //扫描的时间间隔
-    scanMsg.scan_time = (ros::Time::now() - start).toSec()*1e-3;
+    scanMsg.angle_increment = deg2rad(config_.step);
     //时间分辨率（相邻两个角度之间耗费时间）
-    scanMsg.time_increment = scanMsg.scan_time / len;
-    
-    //ROS_INFO("begin:%d",*scanAngleOutVec_.begin());
-    uint16_t size=scanAngleOutVec_.size()-1;
-    if (scanAngleOutVec_[0] < 23 && scanAngleOutVec_[size-1]>35900) pub->publish(scanMsg); //当起始角度从0开始才被认为合法帧
+    scanMsg.time_increment = 1/frequency/float(route)*1e-3;
+    //扫描的时间间隔
+    scanMsg.scan_time = 1/frequency*1e-3; 
+
+    uint16_t size=scanAngleOutVec_.size();
+    uint16_t fb=360/(config_.step);
+    if (fb==size) 
+    {
+      pub->publish(scanMsg); //校验当符合点数完整的一帧数据才向外发布话题
+    }
+    else
+    {
+      if(scanMsgSeq_==1) return;
+      ROS_INFO("pointCloud frame:%d  size:%d  scanMsgSeq_:%d",fb,size,scanMsgSeq_);
+    }
     start = ros::Time::now();
   }
 
@@ -319,16 +330,18 @@ namespace olelidar
     const auto *packet_buf = reinterpret_cast<const Packet *>(&(packet_msg->data[0]));
 
     azimuthNow_ = packet_buf->blocks[0].sequences[0].points[0].azimuth;
+
     //取得第一个数据包
     if (azimuthFirst_ == 0xFFFF)
     {
+      //雷达型号类型
+      lidarType = packet_buf->head.code[1];
       azimuthFirst_ = azimuthNow_;
       //取得转速和转向
       int rpm = (packet_buf->head.rpm) & 0x7FFF;
       direction = (packet_buf->head.rpm) >> 15;
-      ROS_INFO("rpm:%d  direction:%d", rpm, direction);
-      if (inverted_)
-        direction = !direction;
+      ROS_INFO("rpm:%d  direction:%d  lidarType:%d", rpm, direction,lidarType);
+      if (inverted_) direction = !direction;
     }
 
     if (azimuthLast_ < azimuthNow_)
@@ -341,7 +354,6 @@ namespace olelidar
     {
       azimuthLast_ = azimuthNow_;
     }
-
     // scan first half route
     if (azimuthFirst_ >= 200)
     {
@@ -349,8 +361,27 @@ namespace olelidar
       return;
     }
     //ROS_INFO("==============================");
+    
+    //雷达型号类型
+    lidarType = packet_buf->head.code[1];
+    //ROS_INFO("type:%d",lidarType);
+    //角度分辨率
+    config_.step = (scanAngleVec_[1]-scanAngleVec_[0])/100.0;
+    //ROS_INFO("config_.step:%f",config_.step);
+    //点云数量
     config_.route = scanRangeVec_.size();
-    //  ROS_INFO("route:%d  step:%f",config_.route,config_.step);
+    //雷达工作频率
+    if(lidarType==0x01)
+    {
+      int rpm = (packet_buf->head.rpm) & 0x7FFF;
+      frequency = rpm / 60.0;
+      config_.step=360/float(config_.route);
+    }
+    else
+    {    
+      frequency = config_.step * 10000.0/60.0;
+    }
+
 
     scanAngleInVec_.clear();
     scanRangeInVec_.clear();
@@ -396,11 +427,10 @@ namespace olelidar
     config.range_min = 0.01f;
     config.range_max = range_max_;
     ROS_INFO(
-        "Config:angle_min: %.2f, angle_max: %.2f  range_min: %.2f, range_max: %.2f",
+        "angle_min: %.2f, angle_max: %.2f  range_min: %.2f",
         config.angle_min,
         config.angle_max,
-        config.range_min,
-        config.range_max);
+        config.range_min);
     config_ = config;
     Reset();
 
@@ -409,7 +439,7 @@ namespace olelidar
       // topic = sacn,msg = LaserScan,queuesize=10
       scan_pub_ = pnh_.advertise<LaserScan>("scan", 1000);
       packet_sub_ = pnh_.subscribe<OleiPacket>("packet", 256, &Decoder::PacketCb, this);
-      ROS_INFO("Drive Ver:2.0.9");
+      ROS_INFO("Drive Ver:2.0.10");
       ROS_INFO("Decoder initialized");
     }
   }
