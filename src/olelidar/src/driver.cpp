@@ -28,9 +28,6 @@ using namespace diagnostic_updater;
 static constexpr size_t kPacketSize = sizeof(OleiPacket().data);
 static constexpr int kError = -1;
 
-// p49 8.2.1
-// static constexpr double kDelayPerPacketNs = kSequencesPerPacket * kFiringCycleNs;
-// static constexpr double kPacketsPerSecond = 1e9 / kDelayPerPacketNs;
 
 class Driver {
  public:
@@ -71,21 +68,6 @@ Driver::Driver(const ros::NodeHandle &pnh) : pnh_(pnh) {
     ROS_FATAL("Invalid device ip: %s:%d",device_ip_str_.c_str(), device_port_);
     ros::shutdown();
   }
-
-  // ROS diagnostics
-  // mask
-  // updater_.setHardwareID("VLP16");
-
-  // 8.2.1 Data Packet Rate
-  // There are 24 firing cycles in a data packet.
-  // 24 x 55.296 μs = 1.327 ms is the accumulation delay per packet.
-  // 1 packet/1.327 ms = 753.5 packets/second
-  //// freq_ = kPacketsPerSecond;
-  //// ROS_INFO("expected frequency: %.3f (Hz)", freq_);
-
-  ////topic_diag_.reset(new TopicDiagnostic(
-  ////    "packet", updater_, FrequencyStatusParam(&freq_, &freq_, 0.1, 100),
-  ////    TimeStampStatusParam(-0.1, 0.1)));
 
   // Output
   pub_packet_ = pnh_.advertise<OleiPacket>("packet", 10);
@@ -147,24 +129,6 @@ int Driver::ReadPacket(OleiPacket &packet) const {
   socklen_t sender_address_len = sizeof(sender_address);
 
   while (true) {
-    // Unfortunately, the Linux kernel recvfrom() implementation
-    // uses a non-interruptible sleep() when waiting for data,
-    // which would cause this method to hang if the device is not
-    // providing data.  We poll() the device first to make sure
-    // the recvfrom() will not block.
-    //
-    // Note, however, that there is a known Linux kernel bug:
-    //
-    //   Under Linux, select() may report a socket file descriptor
-    //   as "ready for reading", while nevertheless a subsequent
-    //   read blocks.  This could for example happen when data has
-    //   arrived but upon examination has wrong checksum and is
-    //   discarded.  There may be other circumstances in which a
-    //   file descriptor is spuriously reported as ready.  Thus it
-    //   may be safer to use O_NONBLOCK on sockets that should not
-    //   block.
-
-    // poll() until input available
     do {
       const int retval = poll(fds, 1, timeout_ms);
 
@@ -213,15 +177,6 @@ int Driver::ReadPacket(OleiPacket &packet) const {
     ROS_DEBUG_STREAM("incomplete Olei packet read: " << nbytes << " bytes");
   }
 
-  // Average the times at which we begin and end reading.  Use that to
-  // estimate when the scan occurred.
-  //  const auto time_after = ros::Time::now();
-  // Usually take around 0.0012s on my pc
-  //  ROS_INFO("time: %f", time_after - time_before);
-  //  packet.stamp = ros::Time((time_after + time_before) / 2.0);
-  // The ros velodyne driver uses average time to as the time of the packet.
-  // We just use the starting time, and the actual time is this time + some time
-  // delay of communication
   packet.stamp = time_before;
 
   return 0;
@@ -240,11 +195,6 @@ bool Driver::Poll() {
   // publish message using time of last packet read
   pub_packet_.publish(packet);
 
-  // notify diagnostics that a message has been published, updating
-  // its status
-  // remark below for driver debug,here error
-  // topic_diag_->tick(packet->stamp);
-  // updater_.update();
 
   return true;
 }

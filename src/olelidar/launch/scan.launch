@@ -6,15 +6,16 @@
   <arg name="device_ip" default="192.168.1.100"/>
   <arg name="device_port" default="2368"/>
   <!-- decoder -->
+  <arg name="frame_id" default="olelidar"/>
   <arg name="r_max" default="30000"/>
   <arg name="ang_start" default="-180"/>
   <arg name="ang_end" default="180"/>
   <arg name="decoder" default="true"/>
   <arg name="route" default="1600"/>
   <arg name="step" default="0.225"/> 
-  <arg name="frame_id" default="olelidar"/>
   <arg name="inverted" default="false"/>
   <arg name="debug" default="false"/>
+  <arg name="poly" default="1"/>
   <env if="$(arg debug)" name="ROSCONSOLE_CONFIG_FILE" value="$(find olelidar)/launch/debug.conf"/>
 
   <group ns="$(arg frame_id)">
@@ -29,6 +30,7 @@
       <arg name="ang_start" value="$(arg ang_start)"/>
       <arg name="ang_end" value="$(arg ang_end)"/>
       <arg name="inverted" value="$(arg inverted)"/>
+      <arg name="poly" value="$(arg poly)"/>
     </include>
   </group>
 
