@@ -5,12 +5,14 @@
   <arg name="r_max" default="30"/>
   <arg name="ang_start" default="0"/>
   <arg name="ang_end" default="360"/>
+  <arg name="ang_offset" default="180"/>
 
   <node pkg="$(arg pkg)" type="$(arg pkg)_decoder" name="$(arg pkg)_decoder" output="screen">
     <param name="frame_id" type="string" value="$(arg frame_id)"/>
     <param name="r_max" type="int" value="$(arg r_max)"/>
     <param name="ang_start" type="int" value="$(arg ang_start)"/>
     <param name="ang_end" type="int" value="$(arg ang_end)"/>
+    <param name="ang_offset" type="int" value="$(arg ang_offset)"/>
     <remap from="~packet" to="packet"/>
     <remap from="~scan" to="scan"/>
 

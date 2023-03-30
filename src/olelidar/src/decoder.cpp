@@ -100,6 +100,7 @@ class Decoder {
   int range_max_;
   int ange_start_;
   int ange_end_;
+  int ange_offset_;
   ros::NodeHandle pnh_;
   // sub driver topic(msg) 
   ros::Subscriber packet_sub_;
@@ -115,10 +116,19 @@ class Decoder {
   std::vector<uint16_t> scanAngleVec_;
   std::vector<uint16_t> scanRangeVec_;
   std::vector<uint16_t> scanIntensityVec_;
+
+  std::vector<uint16_t> scanAngleInVec_;
+  std::vector<uint16_t> scanAngleOutVec_;
+
   std::vector<uint16_t> scanRangeInVec_;
   std::vector<uint16_t> scanRangeOutVec_;
+
   std::vector<uint16_t> scanIntensityInVec_;
   std::vector<uint16_t> scanIntensityOutVec_;
+
+  std::vector<double> scanAngleBuffer;
+  std::vector<double> scanRangeBuffer;
+  std::vector<double> scanintensitiesBuffer;
   uint16_t azimuthLast_;
   uint16_t azimuthNow_;
   uint16_t azimuthFirst_;
@@ -132,7 +142,7 @@ Decoder::Decoder(const ros::NodeHandle& pnh)
     : pnh_(pnh), cfg_server_(pnh) {
   // get param from cfg file at node start     
   pnh_.param<std::string>("frame_id", frame_id_, "olelidar");
-  pnh_.param<int>("r_max", range_max_, 30);
+  pnh_.param<int>("r_max", range_max_, 10000);
   ROS_INFO("===========================");
   ROS_INFO("Ole Frame_id: %s", frame_id_.c_str());
   ROS_INFO("Ole Topic: %s/scan", frame_id_.c_str());
@@ -185,9 +195,9 @@ void Decoder::PublishMsg(ros::Publisher* pub,std::vector<uint16_t> &packet_r,std
   scanMsg.header.frame_id = frame_id_.c_str();
  
   // below constant future from cfg param 
-
-  scanMsg.angle_min = deg2rad(config_.angle_min);
-  scanMsg.angle_max = deg2rad(config_.angle_max);
+    //重定向输出角度范围
+  scanMsg.angle_min = deg2rad(config_.angle_min+config_.angle_offset);
+  scanMsg.angle_max = deg2rad(config_.angle_max+config_.angle_offset);
   //scanMsg.scan_time = scan_time;
   scanMsg.scan_time = 1.0f/config_.freq;
   
@@ -200,29 +210,44 @@ void Decoder::PublishMsg(ros::Publisher* pub,std::vector<uint16_t> &packet_r,std
   //int effective_count = 1600;
   //std::reverse(myvector.begin(),myvector.end());
   //scanMsg.ranges = std::reverse(scanRangeVec_.begin(),scanRangeVec_.end());
-  double min=scanMsg.angle_min;
-  double max=scanMsg.angle_max;
- // ROS_INFO("Min:%f  Max:%f", min, max);
+  int min=config_.angle_min*100;
+  int max=config_.angle_max*100;
+
+  //ROS_INFO("Min:%d  Max:%d", min, max);
 
 
   scanMsg.ranges.resize(route);
   scanMsg.intensities.resize(route);
-
+  scanAngleBuffer.clear();
+  scanRangeBuffer.clear();
+  scanintensitiesBuffer.clear();
   //ROS_INFO("start to build ranges and intensities");
-  int t=0;
   for(uint16_t i=0;i<route;i++){
     // reverse,laserscan is anticlockwise,
-    scanMsg.ranges[i] = scanRangeOutVec_[route-1 - i] * 0.001f;
-    scanMsg.intensities[i] = scanIntensityOutVec_[route-1 - i] * 1.0f;
-    // mask err,
-    if(scanMsg.ranges[i] > scanMsg.range_max)
-      scanMsg.ranges[i] = scanMsg.range_max;    
-    t++;
+    int angle= scanAngleOutVec_[route-1 - i];
+    if(angle>=min && angle <=max)
+	{
+		double range = scanRangeOutVec_[route-1 - i] * 0.001f;
+		double intensities = scanIntensityOutVec_[route-1 - i] * 1.0f;
+		if(range > scanMsg.range_max) range = scanMsg.range_max; 
+
+	    scanRangeBuffer.push_back(range);
+	    scanintensitiesBuffer.push_back(intensities);
+	}
+  }
+  int bufferlen=scanRangeBuffer.size();
+  scanMsg.ranges.resize(bufferlen);
+  scanMsg.intensities.resize(bufferlen);
+  for(uint16_t i=0;i<bufferlen;i++){
+    scanMsg.ranges[i]=scanRangeBuffer[i];
+    scanMsg.intensities[i]=scanintensitiesBuffer[i];
+    //ROS_INFO("r_:%f",scanMsg.ranges[i]);
   }
 
-  if(scanAngleVec_[0]<22.5) //当起始角度从0开始才被认为合法帧
+  //ROS_INFO("scanAngleOutVec_:%d",scanAngleOutVec_[0]);
+  if(scanAngleOutVec_[0]<23) //当起始角度从0开始才被认为合法帧
   {
-    //uint16_t len=scanAngleVec_[0];
+    int len=scanMsg.ranges.size();
     //ROS_INFO("Length:%d",len);
      pub->publish(scanMsg);
   }
@@ -342,12 +367,14 @@ void Decoder::PacketCb(const OleiPacketConstPtr& packet_msg) {
 
   //memcpy(rangeBuf, &scanRangeVec_[0], route*sizeof(uint16_t));
   //memcpy(intensityBuf, &scanIntensityVec_[0], route*sizeof(uint16_t));
+  scanAngleInVec_.clear();
   scanRangeInVec_.clear();
   scanIntensityInVec_.clear();
+  scanAngleOutVec_.clear();
   scanRangeOutVec_.clear();
   scanIntensityOutVec_.clear();
 
-  //scanAngleVec_.assign(scanAngleVec_.begin(), scanAngleVec_.end());
+  scanAngleInVec_.assign(scanAngleVec_.begin(), scanAngleVec_.end());
   scanRangeInVec_.assign(scanRangeVec_.begin(), scanRangeVec_.end());
   scanIntensityInVec_.assign(scanIntensityVec_.begin(), scanIntensityVec_.end());
 
@@ -355,7 +382,7 @@ void Decoder::PacketCb(const OleiPacketConstPtr& packet_msg) {
   scanRangeVec_.clear();
   scanIntensityVec_.clear();
 
-  //PacketNormalize(scanAngleVec_,scanAngleVec_);
+  PacketNormalize(scanAngleInVec_,scanAngleOutVec_);
   PacketNormalize(scanRangeInVec_,scanRangeOutVec_);
   PacketNormalize(scanIntensityInVec_,scanIntensityOutVec_);
 
@@ -374,14 +401,17 @@ void Decoder::ConfigCb(OleiPuckConfig& config, int level) {
        //config.route =4000;
 pnh_.param<int>("ang_start", ange_start_, 0);
 pnh_.param<int>("ang_end", ange_end_, 360);
+pnh_.param<int>("ang_offset", ange_offset_, 0);
+  pnh_.param<int>("r_max", range_max_, 30);
 config.angle_min=ange_start_;
 config.angle_max=ange_end_;
+config.angle_offset=ange_offset_;
+config.range_max=range_max_;
       //config.step =360/config.route;
+  ROS_INFO("Angle_Offset(rotate):%d",ange_offset_);
   ROS_INFO(
-      "Config:freq: %f, route: %d, step: %f,angle_start: %f, angle_end: %f,range_min: %f, range_max: %f" ,
+      "Config:freq:%.0f\r\n angle_start: %.0f, angle_end: %.0f \r\n range_min: %.0f, range_max: %.0f" ,
       config.freq,
-      config.route,
-      config.step,
       config.angle_min,
       config.angle_max,
       config.range_min,
@@ -394,7 +424,7 @@ config.angle_max=ange_end_;
     // topic = sacn,msg = LaserScan,queuesize=10
     scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
     packet_sub_ = pnh_.subscribe<OleiPacket>("packet", 256, &Decoder::PacketCb, this);
-    ROS_INFO("Drive Ver:2.0.5");
+    ROS_INFO("Drive Ver:2.0.6");
     ROS_INFO("Decoder initialized");
   }
 }

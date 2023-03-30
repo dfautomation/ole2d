@@ -9,6 +9,7 @@
   <arg name="r_max" default="30000"/>
   <arg name="ang_start" default="0"/>
   <arg name="ang_end" default="360"/>
+  <arg name="ang_offset" default="180"/>
   <arg name="decoder" default="true"/>
   <arg name="route" default="1600"/>
   <arg name="step" default="0.225"/> 
@@ -27,6 +28,7 @@
       <arg name="r_max" value="$(arg r_max)"/>
       <arg name="ang_start" value="$(arg ang_start)"/>
       <arg name="ang_end" value="$(arg ang_end)"/>
+      <arg name="ang_offset" value="$(arg ang_offset)"/>
     </include>
   </group>
 
