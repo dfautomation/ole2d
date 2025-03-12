@@ -10,7 +10,7 @@
   <arg name="rpm" default="900"/>
   
   <!-- decoder -->
-  <arg name="frame_id" default="olelidar"/>
+  <arg name="frame_id" default="olelaser_base"/>
   <arg name="range_min" default="0.1"/>
   <arg name="range_max" default="50"/>
   <arg name="ang_start" default="-180"/>
