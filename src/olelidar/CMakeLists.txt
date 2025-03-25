@@ -25,8 +25,8 @@ add_executable(${PROJECT_NAME}_decoder src/decoder.cpp)
 target_include_directories(${PROJECT_NAME}_decoder PUBLIC ${catkin_INCLUDE_DIRS} src)
 target_link_libraries(${PROJECT_NAME}_decoder PUBLIC ${catkin_LIBRARIES} ${PROJECT_NAME}_driver)
 
-add_dependencies(${PROJECT_NAME}_driver ${PROJECT_NAME}_gencfg)
-add_dependencies(${PROJECT_NAME}_decoder ${PROJECT_NAME}_gencfg)
+add_dependencies(${PROJECT_NAME}_driver ${PROJECT_NAME}_gencfg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME}_decoder ${PROJECT_NAME}_gencfg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Mark executables and/or libraries for installation
 install(TARGETS ${PROJECT_NAME}_driver ${PROJECT_NAME}_decoder
@@ -47,8 +47,8 @@ install(FILES
   launch/decoder.launch
   launch/driver.launch
   launch/scan.launch
-  launch/olelidar.launch
-  launch/debug.conf
+  #launch/olelidar.launch
+  #launch/debug.conf
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
 
