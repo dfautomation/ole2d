@@ -40,9 +40,9 @@ namespace olelidar
 
   class Driver
   {
-    using data_cb_t =  std::function<void(const oleiPacketConstPtr&)>;
   public:
-    explicit Driver(const ros::NodeHandle &pnh);
+    using data_cb_t =  std::function<void(const oleiPacketConstPtr&)>;
+    explicit Driver(const ros::NodeHandle &pnh, const data_cb_t &data_cb);
     ~Driver();
 
     bool Poll();
@@ -79,8 +79,9 @@ namespace olelidar
     bool is_loop_{false};
   };
 
-  Driver::Driver(const ros::NodeHandle &pnh) 
+  Driver::Driver(const ros::NodeHandle &pnh, const data_cb_t &data_cb) 
     : pnh_(pnh)
+    , data_cb_(data_cb) 
     , last_time_(ros::Time::now())
   {
     std::string ip4;

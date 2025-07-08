@@ -168,13 +168,13 @@ namespace olelidar
     scanMsgSeq_ = 0;
     direction = 0;
 
-    drv_ = std::make_shared<Driver>(pnh);
+    drv_ = std::make_shared<Driver>(pnh, std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
     
     scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
 #ifdef DRIVER_MODULE
     packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 10, &Decoder::PacketCb, this, ros::TransportHints().tcpNoDelay(true));
 #endif
-    drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
+    // drv_->setCallback(std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
 
     ROS_INFO("Drive Ver:2.1.03");
     ROS_INFO("Decoder initialized");
