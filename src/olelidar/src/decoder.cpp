@@ -103,6 +103,7 @@ namespace olelidar
     float range_max_=50;
     int ange_start_;
     int ange_end_;
+    std::vector< std::pair<int, int> > ang_mask_;
     bool inverted_;
     bool timeFromLidar_;
     int poly_=1;
@@ -212,8 +213,18 @@ namespace olelidar
       int angle = scanAngleInVec_[i];
       if (angle >= min && angle <= max && i % poly_ == 0)
       {
-        float range = scanRangeInVec_[i] * 0.001f;
-        float intensities = scanIntensityInVec_[i] * 1.0f;
+        bool mask = false;
+        for (const auto& m : ang_mask_)
+        {
+          if (angle >= m.first && angle <= m.second)
+          {
+            mask = true;
+            break;
+          }
+        }
+
+        float range = mask ? 0 : scanRangeInVec_[i] * 0.001f;
+        float intensities = mask ? 0 : scanIntensityInVec_[i] * 1.0f;
 
         scanRangeBuffer.push_back(range);
         scanintensitiesBuffer.push_back(intensities);
@@ -450,6 +461,18 @@ namespace olelidar
 
   void Decoder::ConfigCb(oleiPuckConfig &config, int level)
   {
+    XmlRpc::XmlRpcValue ang_mask;
+    pnh_.param("ang_mask", ang_mask, ang_mask);
+    size_t size = ang_mask.size();
+    for (size_t i = 1; i < size; i += 2)
+    {
+      double mask_min = ang_mask[i - 1];
+      double mask_max = ang_mask[i];
+      if (mask_min < mask_max)
+      {
+        ang_mask_.push_back({mask_min * 100 + 18000, mask_max * 100 + 18000});
+      }
+    }
     // config.min_range = std::min(config.min_range, config.max_range);
     //config.route =4000;
     pnh_.param<int>("ang_start", ange_start_, 0);
