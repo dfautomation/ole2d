@@ -97,6 +97,7 @@ namespace olelidar
 
 	ros::Time lastTime = ros::Time::now();
     std::string frame_id_;
+    std::string frame_id2_;
     std::string rpm_;
 	int rpmConfig=900;
     float range_min_=0.1;
@@ -112,6 +113,7 @@ namespace olelidar
     ros::Subscriber packet_sub_;
     // pub laserscan message
     ros::Publisher scan_pub_;
+    ros::Publisher scan2_pub_;
 
     // dynamic param server
     dynamic_reconfigure::Server<oleiPuckConfig> cfg_server_;
@@ -151,6 +153,7 @@ namespace olelidar
   {
     // get param from cfg file at node start
     pnh_.param<std::string>("frame_id", frame_id_, "olelidar");
+    pnh_.param<std::string>("frame_id2", frame_id2_, "");
     pnh_.param<float>("range_min", range_min_, 0.1);
     pnh_.param<float>("range_max", range_max_, 30);
     ROS_INFO("===========================");
@@ -172,6 +175,10 @@ namespace olelidar
     drv_ = std::make_shared<Driver>(pnh, std::bind(&Decoder::PacketCb, this, std::placeholders::_1));
     
     scan_pub_ = pnh_.advertise<LaserScan>("scan", 10);
+    if (frame_id2_.size())
+    {
+      scan2_pub_ = pnh_.advertise<LaserScan>("scan2", 10);
+    }
 #ifdef DRIVER_MODULE
     packet_sub_ = pnh_.subscribe<oleiPacket>("packet", 10, &Decoder::PacketCb, this, ros::TransportHints().tcpNoDelay(true));
 #endif
@@ -204,6 +211,11 @@ namespace olelidar
     int min = config_.angle_min * 100 + 18000;
     int max = config_.angle_max * 100 + 18000;
 
+    std::vector<float> scan2RangeBuffer1;
+    std::vector<float> scan2RangeBuffer2;
+    std::vector<float> scan2intensitiesBuffer1;
+    std::vector<float> scan2intensitiesBuffer2;
+
     scanRangeBuffer.clear();
     scanintensitiesBuffer.clear();
 
@@ -211,7 +223,7 @@ namespace olelidar
     {
       // 过滤出指定角度范围内点云
       int angle = scanAngleInVec_[i];
-      if (angle >= min && angle <= max && i % poly_ == 0)
+      if (i % poly_ == 0)
       {
         bool mask = false;
         for (const auto& m : ang_mask_)
@@ -226,8 +238,24 @@ namespace olelidar
         float range = mask ? 0 : scanRangeInVec_[i] * 0.001f;
         float intensities = mask ? 0 : scanIntensityInVec_[i] * 1.0f;
 
-        scanRangeBuffer.push_back(range);
-        scanintensitiesBuffer.push_back(intensities);
+        if (angle >= min && angle <= max)
+        {
+          scanRangeBuffer.push_back(range);
+          scanintensitiesBuffer.push_back(intensities);
+        }
+        else if (frame_id2_.size())
+        {
+          if (angle > max)
+          {
+            scan2RangeBuffer1.push_back(range);
+            scan2intensitiesBuffer1.push_back(intensities);
+          }
+          else if (angle < min)
+          {
+            scan2RangeBuffer2.push_back(range);
+            scan2intensitiesBuffer2.push_back(intensities);
+          }
+        }
       }
     }
 
@@ -287,7 +315,28 @@ namespace olelidar
     if (fb==size){
       pub->publish(scanMsg); //校验当符合点数完整的一帧数据才向外发布话题
       //ROS_INFO("time:%f  \ttime diff:%f",lidar_time.toSec(),(lidar_time-ros::Time::now()).toSec());
-    
+
+      if (frame_id2_.size())
+      {
+        scanMsg.ranges.resize(0);
+        scanMsg.ranges.insert(scanMsg.ranges.end(), scan2RangeBuffer1.begin(), scan2RangeBuffer1.end());
+        scanMsg.ranges.insert(scanMsg.ranges.end(), scan2RangeBuffer2.begin(), scan2RangeBuffer2.end());
+        if (scanMsg.ranges.size())
+        {
+          scanMsg.intensities.resize(0);
+          scanMsg.intensities.insert(scanMsg.intensities.end(), scan2intensitiesBuffer1.begin(), scan2intensitiesBuffer1.end());
+          scanMsg.intensities.insert(scanMsg.intensities.end(), scan2intensitiesBuffer2.begin(), scan2intensitiesBuffer2.end());
+          scanMsg.header.frame_id = frame_id2_;
+          scanMsg.angle_min = deg2rad(config_.angle_max + step - 180.0);
+          scanMsg.angle_max = deg2rad(config_.angle_min - step + 180.0);
+          scan2_pub_.publish(scanMsg);
+        }
+        else
+        {
+          frame_id2_ = "";
+        }
+      }
+
       lastTime=lidar_time;
     }
     else{
