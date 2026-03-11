@@ -156,6 +156,7 @@ namespace olelidar
     pnh_.param<std::string>("frame_id2", frame_id2_, "");
     pnh_.param<float>("range_min", range_min_, 0.1);
     pnh_.param<float>("range_max", range_max_, 30);
+    poly_ += pnh_.param<int>("skip", 0);
     ROS_INFO("===========================");
     ROS_INFO("Frame_id: %s", frame_id_.c_str());
     ROS_INFO("Topic: /%s/scan", frame_id_.c_str());
@@ -219,42 +220,38 @@ namespace olelidar
     scanRangeBuffer.clear();
     scanintensitiesBuffer.clear();
 
-    for (uint16_t i = 0; i < scanAngleInVec_.size(); i++)
+    for (uint16_t i = 0; i < scanAngleInVec_.size(); i += poly_)
     {
       // 过滤出指定角度范围内点云
       int angle = scanAngleInVec_[i];
-      if (i % poly_ == 0)
+      if (angle >= min && angle <= max || frame_id2_.size())
       {
-        bool mask = false;
+        float range = scanRangeInVec_[i] * 0.001f;
+        float intensities = scanIntensityInVec_[i] * 1.0f;
+
         for (const auto& m : ang_mask_)
         {
           if (angle >= m.first && angle <= m.second)
           {
-            mask = true;
+            range = intensities = 0;
             break;
           }
         }
 
-        float range = mask ? 0 : scanRangeInVec_[i] * 0.001f;
-        float intensities = mask ? 0 : scanIntensityInVec_[i] * 1.0f;
-
-        if (angle >= min && angle <= max)
+        if (angle > max)
+        {
+          scan2RangeBuffer1.push_back(range);
+          scan2intensitiesBuffer1.push_back(intensities);
+        }
+        else if (angle < min)
+        {
+          scan2RangeBuffer2.push_back(range);
+          scan2intensitiesBuffer2.push_back(intensities);
+        }
+        else
         {
           scanRangeBuffer.push_back(range);
           scanintensitiesBuffer.push_back(intensities);
-        }
-        else if (frame_id2_.size())
-        {
-          if (angle > max)
-          {
-            scan2RangeBuffer1.push_back(range);
-            scan2intensitiesBuffer1.push_back(intensities);
-          }
-          else if (angle < min)
-          {
-            scan2RangeBuffer2.push_back(range);
-            scan2intensitiesBuffer2.push_back(intensities);
-          }
         }
       }
     }
