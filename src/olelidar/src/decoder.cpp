@@ -508,6 +508,7 @@ namespace olelidar
   void Decoder::ConfigCb(oleiPuckConfig &config, int level)
   {
     XmlRpc::XmlRpcValue ang_mask;
+    ang_mask.setSize(0);
     pnh_.param("ang_mask", ang_mask, ang_mask);
     size_t size = ang_mask.size();
     for (size_t i = 1; i < size; i += 2)
@@ -534,6 +535,7 @@ namespace olelidar
     config.angle_max = ange_end_;
     config.range_min = range_min_;
     config.range_max = range_max_;
+    config.step = config_.step;
     config_ = config;
 
 
