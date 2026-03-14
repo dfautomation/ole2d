@@ -212,50 +212,51 @@ namespace olelidar
     int min = config_.angle_min * 100 + 18000;
     int max = config_.angle_max * 100 + 18000;
 
-    std::vector<float> scan2RangeBuffer1;
-    std::vector<float> scan2RangeBuffer2;
-    std::vector<float> scan2intensitiesBuffer1;
-    std::vector<float> scan2intensitiesBuffer2;
+    bool scan2 = frame_id2_.size();
 
     scanRangeBuffer.clear();
     scanintensitiesBuffer.clear();
 
-    for (uint16_t i = 0; i < scanAngleInVec_.size(); i += poly_)
+    for (uint16_t i = 0, n = scanAngleInVec_.size(); i < n; i += poly_)
     {
+      uint16_t j = direction ? i : n - i - 1;  // 电机旋转顺时针时，转换右手坐标系法则
       // 过滤出指定角度范围内点云
       int angle = scanAngleInVec_[i];
-      if (angle >= min && angle <= max || frame_id2_.size())
+      if (angle >= min && angle <= max)
       {
-        float range = scanRangeInVec_[i] * 0.001f;
-        float intensities = scanIntensityInVec_[i] * 1.0f;
+        float range = scanRangeInVec_[j] * 0.001f;
+        float intensities = scanIntensityInVec_[j] * 1.0f;
+
+        if (scan2)
+        {
+          scanMsg.ranges.push_back(range);
+          scanMsg.intensities.push_back(intensities);
+        }
 
         for (const auto& m : ang_mask_)
         {
-          if (angle >= m.first && angle <= m.second)
+          if (angle > m.first && angle < m.second)
           {
-            range = intensities = 0;
+            range = kNaNF;
+            intensities = 0;
             break;
           }
         }
 
-        if (angle > max)
-        {
-          scan2RangeBuffer1.push_back(range);
-          scan2intensitiesBuffer1.push_back(intensities);
-        }
-        else if (angle < min)
-        {
-          scan2RangeBuffer2.push_back(range);
-          scan2intensitiesBuffer2.push_back(intensities);
-        }
-        else
+        if (scan2)
         {
           scanRangeBuffer.push_back(range);
           scanintensitiesBuffer.push_back(intensities);
         }
+        else
+        {
+          scanMsg.ranges.push_back(range);
+          scanMsg.intensities.push_back(intensities);
+        }
       }
     }
 
+#if 0
     float bufferlen = scanRangeBuffer.size();
     scanMsg.ranges.resize(bufferlen);
     scanMsg.intensities.resize(bufferlen);
@@ -271,6 +272,7 @@ namespace olelidar
         scanMsg.ranges[i] = scanRangeBuffer[i];
         scanMsg.intensities[i] = scanintensitiesBuffer[i];
     }
+#endif
 
     float len = scanMsg.ranges.size();
     //扫描顺序自增ID序列
@@ -313,25 +315,12 @@ namespace olelidar
       pub->publish(scanMsg); //校验当符合点数完整的一帧数据才向外发布话题
       //ROS_INFO("time:%f  \ttime diff:%f",lidar_time.toSec(),(lidar_time-ros::Time::now()).toSec());
 
-      if (frame_id2_.size())
+      scanMsg.ranges.swap(scanRangeBuffer);
+      scanMsg.intensities.swap(scanintensitiesBuffer);
+      if (scan2)
       {
-        scanMsg.ranges.resize(0);
-        scanMsg.ranges.insert(scanMsg.ranges.end(), scan2RangeBuffer1.begin(), scan2RangeBuffer1.end());
-        scanMsg.ranges.insert(scanMsg.ranges.end(), scan2RangeBuffer2.begin(), scan2RangeBuffer2.end());
-        if (scanMsg.ranges.size())
-        {
-          scanMsg.intensities.resize(0);
-          scanMsg.intensities.insert(scanMsg.intensities.end(), scan2intensitiesBuffer1.begin(), scan2intensitiesBuffer1.end());
-          scanMsg.intensities.insert(scanMsg.intensities.end(), scan2intensitiesBuffer2.begin(), scan2intensitiesBuffer2.end());
-          scanMsg.header.frame_id = frame_id2_;
-          scanMsg.angle_min = deg2rad(config_.angle_max + step - 180.0);
-          scanMsg.angle_max = deg2rad(config_.angle_min - step + 180.0);
-          scan2_pub_.publish(scanMsg);
-        }
-        else
-        {
-          frame_id2_ = "";
-        }
+        scanMsg.header.frame_id = frame_id2_;
+        scan2_pub_.publish(scanMsg);
       }
 
       lastTime=lidar_time;
