@@ -227,6 +227,11 @@ namespace olelidar
         float range = scanRangeInVec_[j] * 0.001f;
         float intensities = scanIntensityInVec_[j] * 1.0f;
 
+        if (scanMsg.ranges.empty() && min)
+        {
+          min = angle;
+        }
+
         if (scan2)
         {
           scanMsg.ranges.push_back(range);
@@ -287,17 +292,21 @@ namespace olelidar
     //scanMsg.header.stamp = ros::Time::now();
     //FrameId
     scanMsg.header.frame_id = frame_id_.c_str();
+    //角度分辨率
+    scanMsg.angle_increment = deg2rad(config_.step * poly_);
     //定义开始角度和结束角度
-    scanMsg.angle_min = deg2rad(config_.angle_min);
-    scanMsg.angle_max = deg2rad(config_.angle_max);
+    scanMsg.angle_min = deg2rad(min ? 0.01 * min - 180 : config_.angle_min);
+    scanMsg.angle_max = config_.angle_max - config_.angle_min < 360 ?
+                        scanMsg.angle_min + scanMsg.angle_increment * (scanMsg.ranges.size() - 1) :
+                        deg2rad(config_.angle_max);
     //定义测距的最小值和最大值单位:m
     scanMsg.range_min = config_.range_min;
     scanMsg.range_max = config_.range_max;
     
-    float step=(config_.angle_max - config_.angle_min)/len;
+    // float step=(config_.angle_max - config_.angle_min)/len;
     //ROS_INFO("len:%f  step:%f",len,step);
     //角度分辨率
-    scanMsg.angle_increment = deg2rad(step);
+    // scanMsg.angle_increment = deg2rad(step);
     //扫描的时间间隔
     scanMsg.scan_time = 1/frequency;
     //时间分辨率（相邻两个角度之间耗费时间）
