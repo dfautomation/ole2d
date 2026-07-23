@@ -204,6 +204,7 @@ namespace olelidar
     memset(&my_addr, 0, sizeof(my_addr));             // initialize to zeros
     my_addr.sin_family = AF_INET;                     // host byte order
     my_addr.sin_port = htons(uint16_t(device_port_)); // short, in network byte order
+    if (multiaddr_ip_str_ != "" || inet_aton(local_ip_str_.c_str(), &my_addr.sin_addr) == 0)
     my_addr.sin_addr.s_addr = INADDR_ANY;            // automatically fill in my IP
     
     
